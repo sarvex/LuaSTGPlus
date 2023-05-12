@@ -20,12 +20,7 @@ def main():
                 full_path = os.path.join(root, filename)
                 relative_path = os.path.relpath(full_path, args.source)
 
-                match = True
-                for m in args.matches:
-                    if not fnmatch.fnmatch(relative_path, m):
-                        match = False
-                        break
-
+                match = all(fnmatch.fnmatch(relative_path, m) for m in args.matches)
                 if match:
                     f.write(relative_path)
                     f.write('\n')

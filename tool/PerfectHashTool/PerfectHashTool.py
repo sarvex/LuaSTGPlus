@@ -193,9 +193,7 @@ def determin_int_type(data):
 
 
 def str_to_char_seq(s):
-    ret = []
-    for ch in s:
-        ret.append(f"'{ch}'")
+    ret = [f"'{ch}'" for ch in s]
     return ', '.join(ret)
 
 
@@ -245,7 +243,7 @@ def generate_code(output_header_file, output_src_file, keys, enums, enum_name, h
         f.write(f'}};\n')
         f.write(f'\n')
         f.write(f'static const {determin_int_type(G)} kPerfectHashG[] = {{\n')
-        f.write(f'    ')
+        f.write('    ')
         for i in range(0, len(G)):
             f.write(f'{G[i]}, ')
             if (i + 1) % 10 == 0:

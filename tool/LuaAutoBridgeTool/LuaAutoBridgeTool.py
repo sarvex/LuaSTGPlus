@@ -117,13 +117,15 @@ def _parse_native_method_name(line):
     # 方法名左侧的括号一定是配对的（简化处理，不考虑比较运算符和'->'的情况）
     for i in range(0, len(line) + 1):
         ch = '\0' if i >= len(line) else line[i]
-        if ch == '(' or ch == '<':
-            if ch == '(' and len(stack) == 0:
+        if ch == '(':
+            if not stack:
                 maybe.append(i)
             stack.append(ch)
-        elif ch == ')' or ch == '>':
+        elif ch == '<':
+            stack.append(ch)
+        elif ch in [')', '>']:
             expected = '(' if ch == ')' else '<'
-            if len(stack) > 0 and stack[len(stack) - 1] == expected:
+            if stack and stack[-1] == expected:
                 stack.pop(len(stack) - 1)
             else:
                 raise RuntimeError(f'Unexpected symbol "{ch}"')
@@ -134,7 +136,7 @@ def _parse_native_method_name(line):
         for i in range(index - 1, -2, -1):
             ch = '\0' if i < 0 else line[i]
             if state == 0:
-                if ch == '\t' or ch == ' ':
+                if ch in ['\t', ' ']:
                     continue
                 elif ('a' <= ch <= 'z') or ('A' <= ch <= 'Z') or ch == '_':
                     state = 1
@@ -201,9 +203,7 @@ class HeaderParser:
 
     def _strip(self, line):
         groups = HeaderParser.REGEX_STRIP.match(line)
-        if groups and groups.group(1):
-            return groups.group(1)
-        return ''
+        return groups.group(1) if groups and groups.group(1) else ''
 
     def _parse_hint_name(self, line, regex, match_group, state_next):
         groups = regex.match(line)
@@ -217,10 +217,17 @@ class HeaderParser:
         return groups
 
     def _on_document_finish(self):
-        if self._state == PARSE_STATE_CLASS_LOOK_FOR_CLASS_NAME or self._state == PARSE_STATE_MODULE_LOOK_FOR_CLASS_NAME:
+        if self._state in [
+            PARSE_STATE_CLASS_LOOK_FOR_CLASS_NAME,
+            PARSE_STATE_MODULE_LOOK_FOR_CLASS_NAME,
+        ]:
             raise RuntimeError('Class declaration expected, but found EOF')
-        elif self._state == PARSE_STATE_CLASS_PARSE_METHOD_NAME or self._state == PARSE_STATE_CLASS_PARSE_GETTER_NAME or \
-                self._state == PARSE_STATE_CLASS_PARSE_SETTER_NAME or self._state == PARSE_STATE_MODULE_PARSE_METHOD_NAME:
+        elif self._state in [
+            PARSE_STATE_CLASS_PARSE_METHOD_NAME,
+            PARSE_STATE_CLASS_PARSE_GETTER_NAME,
+            PARSE_STATE_CLASS_PARSE_SETTER_NAME,
+            PARSE_STATE_MODULE_PARSE_METHOD_NAME,
+        ]:
             raise RuntimeError('Member function declaration expected, but found EOF')
         self._state = PARSE_STATE_DEFAULT
         self._current_class = None
@@ -242,8 +249,8 @@ class HeaderParser:
         groups = HeaderParser.REGEX_CLASS_NAME_MATCH.match(line)
         if not groups:
             groups = HeaderParser.REGEX_CLASS_NAME_ALIAS_MATCH.match(line)
-            if not groups:
-                raise RuntimeError('Cannot parse class declaration')
+        if not groups:
+            raise RuntimeError('Cannot parse class declaration')
         cls = ClassDecl(groups.group(2))
         if cls.get_name() in self._classes:
             raise RuntimeError('Class already defined (namespace is not supported yet)')
@@ -285,10 +292,7 @@ class HeaderParser:
         groups = self._parse_hint_name(line, HeaderParser.REGEX_MODULE_HINT, 2, PARSE_STATE_MODULE_LOOK_FOR_CLASS_NAME)
         self._current_class = None
         self._current_enum = None
-        if groups.group(4):
-            self._current_flag = groups.group(4)
-        else:
-            self._current_flag = None
+        self._current_flag = groups.group(4) if groups.group(4) else None
 
     def _on_parse_module_name(self, line):
         groups = HeaderParser.REGEX_CLASS_NAME_MATCH.match(line)
@@ -362,27 +366,33 @@ class HeaderParser:
         line = self._strip(line)
         if line == '':
             return
-        if self._state == PARSE_STATE_DEFAULT or self._state == PARSE_STATE_CLASS_LOOK_FOR_METHOD or \
-                self._state == PARSE_STATE_MODULE_LOOK_FOR_METHOD or self._state == PARSE_STATE_MODULE_LOOK_FOR_ENUM_FIELD:
+        if self._state in [
+            PARSE_STATE_DEFAULT,
+            PARSE_STATE_CLASS_LOOK_FOR_METHOD,
+            PARSE_STATE_MODULE_LOOK_FOR_METHOD,
+            PARSE_STATE_MODULE_LOOK_FOR_ENUM_FIELD,
+        ]:
             if line.startswith('LSTG_CLASS'):
                 self._on_class_decl(line)
             elif line.startswith('LSTG_MODULE'):
                 self._on_module_decl(line)
-            else:
-                if self._state == PARSE_STATE_CLASS_LOOK_FOR_METHOD:
-                    if line.startswith('LSTG_METHOD'):
-                        self._on_class_method_decl(line)
-                    elif line.startswith('LSTG_GETTER'):
-                        self._on_class_getter_decl(line)
-                    elif line.startswith('LSTG_SETTER'):
-                        self._on_class_setter_decl(line)
-                elif self._state == PARSE_STATE_MODULE_LOOK_FOR_METHOD or self._state == PARSE_STATE_MODULE_LOOK_FOR_ENUM_FIELD:
-                    if line.startswith('LSTG_METHOD'):
-                        self._on_module_method_decl(line)
-                    elif line.startswith('LSTG_ENUM'):
-                        self._on_module_enum_decl(line)
-                    elif self._state == PARSE_STATE_MODULE_LOOK_FOR_ENUM_FIELD and line.startswith('LSTG_FIELD'):
-                        self._on_enum_field(line)
+            elif self._state == PARSE_STATE_CLASS_LOOK_FOR_METHOD:
+                if line.startswith('LSTG_METHOD'):
+                    self._on_class_method_decl(line)
+                elif line.startswith('LSTG_GETTER'):
+                    self._on_class_getter_decl(line)
+                elif line.startswith('LSTG_SETTER'):
+                    self._on_class_setter_decl(line)
+            elif self._state in [
+                PARSE_STATE_MODULE_LOOK_FOR_METHOD,
+                PARSE_STATE_MODULE_LOOK_FOR_ENUM_FIELD,
+            ]:
+                if line.startswith('LSTG_METHOD'):
+                    self._on_module_method_decl(line)
+                elif line.startswith('LSTG_ENUM'):
+                    self._on_module_enum_decl(line)
+                elif self._state == PARSE_STATE_MODULE_LOOK_FOR_ENUM_FIELD and line.startswith('LSTG_FIELD'):
+                    self._on_enum_field(line)
         elif self._state == PARSE_STATE_CLASS_LOOK_FOR_CLASS_NAME:
             self._on_parse_class_name(line)
         elif self._state == PARSE_STATE_MODULE_LOOK_FOR_CLASS_NAME:
@@ -419,9 +429,7 @@ def main():
 
     # 计算包含头部
     includes = []
-    base = ''
-    if cmd_args.base != '':
-        base = os.path.abspath(cmd_args.base)
+    base = os.path.abspath(cmd_args.base) if cmd_args.base != '' else ''
     for path in cmd_args.files:
         abs_path = os.path.abspath(path)
         if base != '':

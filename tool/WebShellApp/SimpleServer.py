@@ -75,8 +75,7 @@ class RangeHTTPRequestHandler(server.SimpleHTTPRequestHandler):
             self.send_response(200)
         self.send_header('Content-type', ctype)
         self.send_header('Accept-Ranges', 'bytes')
-        self.send_header('Content-Range',
-                         'bytes %s-%s/%s' % (start, end, size))
+        self.send_header('Content-Range', f'bytes {start}-{end}/{size}')
         self.send_header('Content-Length', str(l))
         self.send_header('Last-Modified', self.date_time_string(int(fs.st_mtime)))
         self.end_headers()
@@ -89,7 +88,7 @@ class RangeHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         bytes are copied.
         Otherwise, the entire file is copied using SimpleHTTPServer.copyfile
         """
-        if not 'Range' in self.headers:
+        if 'Range' not in self.headers:
             server.SimpleHTTPRequestHandler.copyfile(self, infile, outfile)
             return
 
@@ -97,10 +96,10 @@ class RangeHTTPRequestHandler(server.SimpleHTTPRequestHandler):
         infile.seek(start)
         bufsize=64*1024 ## 64KB
         while True:
-            buf = infile.read(bufsize)
-            if not buf:
+            if buf := infile.read(bufsize):
+                outfile.write(buf)
+            else:
                 break
-            outfile.write(buf)
 
 
 # https://stackoverflow.com/questions/12499171/can-i-set-a-header-with-pythons-simplehttpserver

@@ -20,7 +20,7 @@ def main():
     args = parser.parse_args()
 
     if not re.match("[a-zA-Z_][a-zA-Z0-9_]*", args.name):
-        print("Invalid identifier '%s'" % args.name, file=sys.stderr)
+        print(f"Invalid identifier '{args.name}'", file=sys.stderr)
         return
 
     # Read input file
@@ -39,7 +39,7 @@ def main():
                 fout.write("".join(line))
                 fout.write("\n")
                 line.clear()
-        if len(line) > 0:
+        if line:
             fout.write(" " * INDENT_LEN)
             fout.write("".join(line))
             fout.write("\n")
